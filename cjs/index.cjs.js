@@ -9,6 +9,7 @@ const { bindRefs } = require('./bindRefs');
 
 module.exports = {
 	bindRefs,
+	bindRef,
 	socketRef,
 	socketShallowRef
 };

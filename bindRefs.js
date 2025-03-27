@@ -59,3 +59,19 @@ export function bindRefs(refA, refB) {
 	};
 	
 }
+
+
+/**
+ * Helper method to bindRefs but assign the value of refB to refA
+ * 
+ * @param {ref|shallowRef} ref - the ref to bind to another, existing ref
+ * @returns {Object} - an object with a .to() method that takes a ref to bind to
+ */
+export function bindRef(ref){
+	return {
+		to: function(refB){
+			ref.value = refB.value;
+			return bindRefs(ref, refB);
+		}
+	}
+}
