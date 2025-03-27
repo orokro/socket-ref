@@ -1,2 +1,8 @@
+
+#folders
 node_modules/
+misc/
+
+#other
+socket-ref-0.0.1.tgz
 
