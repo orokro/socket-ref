@@ -1,30 +1,47 @@
 {
-  "name": "socket-ref",
-  "version": "0.0.1",
-  "description": "socketRefs are Vue compatible refs, syncronized over websockets",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/orokro/socket-ref.git"
-  },
-  "keywords": [
-    "vue",
-    "ref",
-    "shallowRef",
-    "websockets",
-    "sockets",
-    "sync"
-  ],
-  "author": "Greg Miller",
-  "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/orokro/socket-ref/issues"
-  },
-  "homepage": "https://github.com/orokro/socket-ref#readme",
-  "dependencies": {
-    "vue": "^3.5.13"
-  }
+	"name": "socket-ref",
+	"version": "0.0.1",
+	"description": "Vue-compatible refs synchronized over websockets",
+	"type": "module",
+	"exports": {
+		".": "./index.js",
+		"./server": "./socketRefServer.js"
+	},
+	"main": "./index.js",
+	"files": [
+		"index.js",
+		"socketRefClient.js",
+		"socketRefServer.js",
+		"bindRefs.js"
+	],
+	"scripts": {
+		"test": "echo \"Error: no test specified\" && exit 1"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/orokro/socket-ref.git"
+	},
+	"keywords": [
+		"vue",
+		"ref",
+		"shallowRef",
+		"websockets",
+		"sockets",
+		"sync"
+	],
+	"author": "Greg Miller",
+	"license": "ISC",
+	"bugs": {
+		"url": "https://github.com/orokro/socket-ref/issues"
+	},
+	"homepage": "https://github.com/orokro/socket-ref#readme",
+	"peerDependencies": {
+		"vue": "^3.0.0"
+	},
+	"devDependencies": {
+		"vue": "^3.5.13"
+	},
+	"optionalDependencies": {
+		"ws": "^8.18.1"
+	}
 }
