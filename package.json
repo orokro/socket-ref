@@ -4,22 +4,29 @@
 	"description": "Vue-compatible refs synchronized over websockets",
 	"type": "module",
 	"exports": {
-		".": "./index.js",
-		"./server": "./socketRefServer.js"
+		".": {
+			"import": "./index.js",
+			"require": "./cjs/index.cjs.js"
+		},
+		"./server": {
+			"import": "./socketRefServer.js",
+			"require": "./cjs/socketRefServer.cjs.js"
+		}
 	},
 	"main": "./index.js",
 	"files": [
 		"index.js",
 		"socketRefClient.js",
 		"socketRefServer.js",
-		"bindRefs.js"
+		"bindRefs.js",
+		"cjs/"
 	],
 	"scripts": {
 		"test": "echo \"Error: no test specified\" && exit 1"
 	},
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/orokro/socket-ref.git"
+		"url": "https://github.com/orokro/socket-ref.git"
 	},
 	"keywords": [
 		"vue",
@@ -38,10 +45,10 @@
 	"peerDependencies": {
 		"vue": "^3.0.0"
 	},
-	"devDependencies": {
-		"vue": "^3.5.13"
-	},
 	"optionalDependencies": {
 		"ws": "^8.18.1"
+	},
+	"devDependencies": {
+		"vue": "^3.5.13"
 	}
 }
