@@ -1,6 +1,6 @@
 {
 	"name": "socket-ref",
-	"version": "0.0.3",
+	"version": "0.0.4",
 	"description": "Vue-compatible refs synchronized over websockets",
 	"exports": {
 		".": {
