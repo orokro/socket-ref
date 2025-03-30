@@ -25,7 +25,7 @@ const registry = new FinalizationRegistry(({ socketRefState }) => {
  * @param {*} defaultValue - The default value for the socketRef
  * @returns {ref} - A ref that is synced with a server via a WebSocket
  */
-function socketRef(keyOrObj, defaultValue) {
+export function socketRef(keyOrObj, defaultValue) {
 	return createSocketRef(ref, keyOrObj, defaultValue);
 }
 
@@ -37,7 +37,7 @@ function socketRef(keyOrObj, defaultValue) {
  * @param {*} defaultValue - The default value for the socketRef
  * @returns {shallowRef} - A shallowRef that is synced with a server via a WebSocket
  */
-function socketShallowRef(keyOrObj, defaultValue) {
+export function socketShallowRef(keyOrObj, defaultValue) {
 	return createSocketRef(shallowRef, keyOrObj, defaultValue);
 }
 
@@ -108,6 +108,9 @@ class SocketRefState {
 		this.key = key;
 		this.defaultValue = defaultValue;
 
+		// true if we have a pending write while the socket is not ready
+		this.pendingWrite = null; 
+
 		// for writing, we'll need a timestamp
 		this.timestamp = 0;
 
@@ -159,8 +162,40 @@ class SocketRefState {
 
 			// Handle init response, which includes the current value from the server
 			if (msg.type === 'init') {
-				this.timestamp = msg.timestamp || Date.now();
-				state.value = msg.value;
+				
+				const serverTimestamp = msg.timestamp || 0;
+				const serverValue = msg.value;
+
+				const state = this.weakState.deref();
+				if (!state) return;
+
+				// Compare pending write vs server timestamp
+				if (serverValue === null) {
+
+					// Server has no value for this key
+					if (this.pendingWrite) {
+						state.value = this.pendingWrite.value;
+						this.write(this.pendingWrite.value, this.pendingWrite.timestamp);
+					} else {
+						state.value = this.defaultValue;
+						this.write(this.defaultValue);
+					}
+					this.timestamp = Date.now(); // mark this client as source of truth
+
+				} else {
+
+					// Server has value
+					if (this.pendingWrite && this.pendingWrite.timestamp > serverTimestamp) {
+						state.value = this.pendingWrite.value;
+						this.write(this.pendingWrite.value, this.pendingWrite.timestamp);
+						this.timestamp = this.pendingWrite.timestamp;
+					} else {
+						state.value = serverValue;
+						this.timestamp = serverTimestamp;
+					}
+				}
+
+				this.pendingWrite = null; // clear pending write
 				this.ready = true;
 				return;
 			}
@@ -193,19 +228,22 @@ class SocketRefState {
 	 * 
 	 * @param {*} newValue - The new value to write to the server
 	 */
-	write(newValue) {
+	write(newValue, forceTimestamp = null) {
 
-		// get a new timestamp
-		this.timestamp = Date.now();
+		const ts = forceTimestamp || Date.now();
+		this.timestamp = ts;
+
 		if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-
-			// send the update message to the server
 			this.socket.send(JSON.stringify({
 				type: 'update',
 				key: this.key,
 				value: newValue,
-				timestamp: this.timestamp
+				timestamp: ts
 			}));
+
+		} else {
+			// Track pending write if not yet ready
+			this.pendingWrite = { value: newValue, timestamp: ts };
 		}
 	}
 
@@ -231,5 +269,6 @@ class SocketRefState {
 	}
 	
 }
+
 
 module.exports = { socketRef, socketShallowRef };
