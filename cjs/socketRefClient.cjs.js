@@ -43,14 +43,47 @@ export function socketShallowRef(keyOrObj, defaultValue) {
 
 
 /**
+ * Get a vue ref that is synced with a server via a WebSocket, async version waiting for connection
+ * 
+ * @param {String} keyOrObj - The key for the socketRef, or an object with options
+ * @param {*} defaultValue - The default value for the socketRef
+ * @returns {ref} - A ref that is synced with a server via a WebSocket
+ */
+export function socketRefAsync(keyOrObj, defaultValue) {
+	return new Promise((resolve, reject) => {
+		const newRef = createSocketRef(ref, keyOrObj, defaultValue, ()=>{
+			resolve(newRef);
+		});
+	});
+}
+
+
+/**
+ * Get a vue shallowRef that is synced with a server via a WebSocket, async version waiting for connection
+ * 
+ * @param {String} keyOrObj - The key for the socketRef, or an object with options
+ * @param {*} defaultValue - The default value for the socketRef
+ * @returns {shallowRef} - A shallowRef that is synced with a server via a WebSocket
+ */
+export function socketShallowRefAsync(keyOrObj, defaultValue) {
+	return new Promise((resolve, reject) => {
+		const newRef = createSocketRef(shallowRef, keyOrObj, defaultValue, ()=>{
+			resolve(newRef);
+		});
+	});	
+}
+
+
+/**
  * Create a ref that is synced with a server via a WebSocket
  * 
  * @param {ref|shallowRef} refType - The type of ref to create, ref or shallowRef
  * @param {String|Object} keyOrObj - The key for the socketRef, or an object with options
  * @param {*} initialValue - The default value for the socketRef
+ * @param {Function} onInitialConnect - OPTIONAL; A callback to run when the socket connects
  * @returns {ref|shallowRef} - A ref that is synced with a server via a WebSocket
  */
-function createSocketRef(refType, keyOrObj, initialValue) {
+function createSocketRef(refType, keyOrObj, initialValue, onInitialConnect) {
 
 	// if we got a string for our second param, wrap it into an options object
 	const options = typeof keyOrObj === 'string' ? { key: keyOrObj } : keyOrObj;
@@ -69,7 +102,7 @@ function createSocketRef(refType, keyOrObj, initialValue) {
 	// the rest of the websocket syncing logic will be handled in the SocketRefState class
 	// we pass in weakState, because the only valid strong reference to the state is the ref itself
 	// that this function returns. This way, we can clean up the state when the ref is no longer used.
-	const socketRefState = new SocketRefState(weakState, key, initialValue, ip, port);
+	const socketRefState = new SocketRefState(weakState, key, initialValue, ip, port, onInitialConnect);
 
 	// we're going to return state, which is a ref. This means outside code can change it's .value.
 	// thus, we will watch the state ref before we return it, so we can call the socket code to update the server
@@ -100,13 +133,15 @@ class SocketRefState {
 	 * @param {*} defaultValue - The default value for the socketRef
 	 * @param {String} ip - The IP address of the server
 	 * @param {String|Number} port - The port of the server 
+	 * @param {Function} onInitialConnect - A callback to run when the socket connects
 	 */
-	constructor(weakState, key, defaultValue, ip, port) {
+	constructor(weakState, key, defaultValue, ip, port, onInitialConnect) {
 
 		// store the weakState, key, defaultValue, and timestamp
 		this.weakState = weakState;
 		this.key = key;
 		this.defaultValue = defaultValue;
+		this.onInitialConnect = onInitialConnect;
 
 		// true if we have a pending write while the socket is not ready
 		this.pendingWrite = null; 
@@ -139,10 +174,16 @@ class SocketRefState {
 
 		// when we connect send the init message w/ our key
 		this.socket.onopen = () => {
+
+			// send the init message
 			this.socket.send(JSON.stringify({
 				type: 'init',
 				key: this.key
 			}));
+
+			// if we have a callback for the initial connect, run it
+			if (this.onInitialConnect)
+				this.onInitialConnect();
 		};
 
 		// when this socket receives a message, parse it and update the state
@@ -162,7 +203,7 @@ class SocketRefState {
 
 			// Handle init response, which includes the current value from the server
 			if (msg.type === 'init') {
-				
+
 				const serverTimestamp = msg.timestamp || 0;
 				const serverValue = msg.value;
 
@@ -269,6 +310,5 @@ class SocketRefState {
 	}
 	
 }
-
 
 module.exports = { socketRef, socketShallowRef };
