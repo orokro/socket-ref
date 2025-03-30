@@ -180,10 +180,6 @@ class SocketRefState {
 				type: 'init',
 				key: this.key
 			}));
-
-			// if we have a callback for the initial connect, run it
-			if (this.onInitialConnect)
-				this.onInitialConnect();
 		};
 
 		// when this socket receives a message, parse it and update the state
@@ -208,7 +204,12 @@ class SocketRefState {
 				const serverValue = msg.value;
 
 				const state = this.weakState.deref();
-				if (!state) return;
+				if (!state){
+					// if we have a callback for the initial connect, run it
+					if (this.onInitialConnect)
+						this.onInitialConnect(false);
+					return;
+				}
 
 				// Compare pending write vs server timestamp
 				if (serverValue === null) {
@@ -238,6 +239,10 @@ class SocketRefState {
 
 				this.pendingWrite = null; // clear pending write
 				this.ready = true;
+
+				// if we have a callback for the initial connect, run it
+				if (this.onInitialConnect)
+					this.onInitialConnect();
 				return;
 			}
 

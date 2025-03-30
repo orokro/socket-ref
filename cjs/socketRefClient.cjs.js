@@ -25,7 +25,7 @@ const registry = new FinalizationRegistry(({ socketRefState }) => {
  * @param {*} defaultValue - The default value for the socketRef
  * @returns {ref} - A ref that is synced with a server via a WebSocket
  */
-export function socketRef(keyOrObj, defaultValue) {
+function socketRef(keyOrObj, defaultValue) {
 	return createSocketRef(ref, keyOrObj, defaultValue);
 }
 
@@ -37,7 +37,7 @@ export function socketRef(keyOrObj, defaultValue) {
  * @param {*} defaultValue - The default value for the socketRef
  * @returns {shallowRef} - A shallowRef that is synced with a server via a WebSocket
  */
-export function socketShallowRef(keyOrObj, defaultValue) {
+function socketShallowRef(keyOrObj, defaultValue) {
 	return createSocketRef(shallowRef, keyOrObj, defaultValue);
 }
 
@@ -49,7 +49,7 @@ export function socketShallowRef(keyOrObj, defaultValue) {
  * @param {*} defaultValue - The default value for the socketRef
  * @returns {ref} - A ref that is synced with a server via a WebSocket
  */
-export function socketRefAsync(keyOrObj, defaultValue) {
+function socketRefAsync(keyOrObj, defaultValue) {
 	return new Promise((resolve, reject) => {
 		const newRef = createSocketRef(ref, keyOrObj, defaultValue, ()=>{
 			resolve(newRef);
@@ -65,7 +65,7 @@ export function socketRefAsync(keyOrObj, defaultValue) {
  * @param {*} defaultValue - The default value for the socketRef
  * @returns {shallowRef} - A shallowRef that is synced with a server via a WebSocket
  */
-export function socketShallowRefAsync(keyOrObj, defaultValue) {
+function socketShallowRefAsync(keyOrObj, defaultValue) {
 	return new Promise((resolve, reject) => {
 		const newRef = createSocketRef(shallowRef, keyOrObj, defaultValue, ()=>{
 			resolve(newRef);
@@ -180,10 +180,6 @@ class SocketRefState {
 				type: 'init',
 				key: this.key
 			}));
-
-			// if we have a callback for the initial connect, run it
-			if (this.onInitialConnect)
-				this.onInitialConnect();
 		};
 
 		// when this socket receives a message, parse it and update the state
@@ -208,7 +204,12 @@ class SocketRefState {
 				const serverValue = msg.value;
 
 				const state = this.weakState.deref();
-				if (!state) return;
+				if (!state){
+					// if we have a callback for the initial connect, run it
+					if (this.onInitialConnect)
+						this.onInitialConnect(false);
+					return;
+				}
 
 				// Compare pending write vs server timestamp
 				if (serverValue === null) {
@@ -235,9 +236,13 @@ class SocketRefState {
 						this.timestamp = serverTimestamp;
 					}
 				}
-
 				this.pendingWrite = null; // clear pending write
 				this.ready = true;
+
+				// if we have a callback for the initial connect, run it
+				if (this.onInitialConnect)
+					this.onInitialConnect();
+				
 				return;
 			}
 
@@ -311,4 +316,4 @@ class SocketRefState {
 	
 }
 
-module.exports = { socketRef, socketShallowRef };
+module.exports = { socketRef, socketShallowRef, socketRefAsync, socketShallowRefAsync };

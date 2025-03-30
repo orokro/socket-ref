@@ -4,12 +4,14 @@
 
 	CommonJS re-exports of the frontend-safe utilities.
 */
-const { socketRef, socketShallowRef } = require('./socketRefClient');
+const { socketRef, socketShallowRef, socketRefAsync, socketShallowRefAsync } = require('./socketRefClient');
 const { bindRefs } = require('./bindRefs');
 
 module.exports = {
 	bindRefs,
 	bindRef,
 	socketRef,
-	socketShallowRef
+	socketShallowRef,
+	socketRefAsync,
+	socketShallowRefAsync
 };
