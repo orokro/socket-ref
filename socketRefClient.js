@@ -10,7 +10,7 @@
 */
 
 // vue
-import { ref, shallowRef, watch } from 'vue';
+import { ref, shallowRef, watch, computed } from 'vue';
 
 // FinalizationRegistry for cleanup when the ref is no longer used
 const registry = new FinalizationRegistry(({ socketRefState }) => {
@@ -26,7 +26,7 @@ const registry = new FinalizationRegistry(({ socketRefState }) => {
  * @returns {ref} - A ref that is synced with a server via a WebSocket
  */
 export function socketRef(keyOrObj, defaultValue) {
-	return createSocketRef(ref, keyOrObj, defaultValue);
+	return createSocketRef(ref, keyOrObj, defaultValue, false);
 }
 
 
@@ -38,7 +38,32 @@ export function socketRef(keyOrObj, defaultValue) {
  * @returns {shallowRef} - A shallowRef that is synced with a server via a WebSocket
  */
 export function socketShallowRef(keyOrObj, defaultValue) {
-	return createSocketRef(shallowRef, keyOrObj, defaultValue);
+	return createSocketRef(shallowRef, keyOrObj, defaultValue, false);
+}
+
+
+
+/**
+ * Get a vue ref that is synced with a server via a WebSocket
+ * 
+ * @param {String} keyOrObj - The key for the socketRef, or an object with options
+ * @param {*} defaultValue - The default value for the socketRef
+ * @returns {ref} - A ref that is synced with a server via a WebSocket
+ */
+export function socketRefReadOnly(keyOrObj, defaultValue) {
+	return createSocketRef(ref, keyOrObj, defaultValue, true);
+}
+
+
+/**
+ * Get a vue shallowRef that is synced with a server via a WebSocket
+ * 
+ * @param {String} keyOrObj - The key for the socketRef, or an object with options
+ * @param {*} defaultValue - The default value for the socketRef
+ * @returns {shallowRef} - A shallowRef that is synced with a server via a WebSocket
+ */
+export function socketShallowRefReadOnly(keyOrObj, defaultValue) {
+	return createSocketRef(shallowRef, keyOrObj, defaultValue, true);
 }
 
 
@@ -51,7 +76,7 @@ export function socketShallowRef(keyOrObj, defaultValue) {
  */
 export function socketRefAsync(keyOrObj, defaultValue) {
 	return new Promise((resolve, reject) => {
-		const newRef = createSocketRef(ref, keyOrObj, defaultValue, ()=>{
+		const newRef = createSocketRef(ref, keyOrObj, defaultValue, false, () => {
 			resolve(newRef);
 		});
 	});
@@ -67,10 +92,10 @@ export function socketRefAsync(keyOrObj, defaultValue) {
  */
 export function socketShallowRefAsync(keyOrObj, defaultValue) {
 	return new Promise((resolve, reject) => {
-		const newRef = createSocketRef(shallowRef, keyOrObj, defaultValue, ()=>{
+		const newRef = createSocketRef(shallowRef, keyOrObj, defaultValue, false, () => {
 			resolve(newRef);
 		});
-	});	
+	});
 }
 
 
@@ -80,10 +105,11 @@ export function socketShallowRefAsync(keyOrObj, defaultValue) {
  * @param {ref|shallowRef} refType - The type of ref to create, ref or shallowRef
  * @param {String|Object} keyOrObj - The key for the socketRef, or an object with options
  * @param {*} initialValue - The default value for the socketRef
+ * @param {Boolean} readyOnly - OPTIONAL; If true, the ref will be read-only
  * @param {Function} onInitialConnect - OPTIONAL; A callback to run when the socket connects
  * @returns {ref|shallowRef} - A ref that is synced with a server via a WebSocket
  */
-function createSocketRef(refType, keyOrObj, initialValue, onInitialConnect) {
+function createSocketRef(refType, keyOrObj, initialValue, readyOnly, onInitialConnect) {
 
 	// if we got a string for our second param, wrap it into an options object
 	const options = typeof keyOrObj === 'string' ? { key: keyOrObj } : keyOrObj;
@@ -102,11 +128,12 @@ function createSocketRef(refType, keyOrObj, initialValue, onInitialConnect) {
 	// the rest of the websocket syncing logic will be handled in the SocketRefState class
 	// we pass in weakState, because the only valid strong reference to the state is the ref itself
 	// that this function returns. This way, we can clean up the state when the ref is no longer used.
-	const socketRefState = new SocketRefState(weakState, key, initialValue, ip, port, onInitialConnect);
+	const socketRefState = new SocketRefState(weakState, key, initialValue, ip, port, readyOnly, onInitialConnect);
 
 	// we're going to return state, which is a ref. This means outside code can change it's .value.
 	// thus, we will watch the state ref before we return it, so we can call the socket code to update the server
-	socketRefState.stopWatch = watch(state, (newVal) => {
+	socketRefState.stopWatch = watch(state, (newVal, oldValue) => {
+
 		if (socketRefState.ready) {
 			socketRefState.write(newVal);
 		}
@@ -114,6 +141,11 @@ function createSocketRef(refType, keyOrObj, initialValue, onInitialConnect) {
 
 	// register the state with the finalization registry, so we can clean up when the ref is no longer used
 	registry.register(state, { socketRefState });
+
+	// only return this
+	if(readyOnly){
+		return computed(() => weakState.deref().value);
+	}
 
 	// return the ref
 	return state;
@@ -133,18 +165,20 @@ class SocketRefState {
 	 * @param {*} defaultValue - The default value for the socketRef
 	 * @param {String} ip - The IP address of the server
 	 * @param {String|Number} port - The port of the server 
+	 * @param {Boolean} readyOnly - True if the ref is read-only
 	 * @param {Function} onInitialConnect - A callback to run when the socket connects
 	 */
-	constructor(weakState, key, defaultValue, ip, port, onInitialConnect) {
+	constructor(weakState, key, defaultValue, ip, port, readyOnly, onInitialConnect) {
 
 		// store the weakState, key, defaultValue, and timestamp
 		this.weakState = weakState;
 		this.key = key;
 		this.defaultValue = defaultValue;
+		this.readyOnly = readyOnly;
 		this.onInitialConnect = onInitialConnect;
 
 		// true if we have a pending write while the socket is not ready
-		this.pendingWrite = null; 
+		this.pendingWrite = null;
 
 		// for writing, we'll need a timestamp
 		this.timestamp = 0;
@@ -204,7 +238,7 @@ class SocketRefState {
 				const serverValue = msg.value;
 
 				const state = this.weakState.deref();
-				if (!state){
+				if (!state) {
 					// if we have a callback for the initial connect, run it
 					if (this.onInitialConnect)
 						this.onInitialConnect(false);
@@ -267,7 +301,7 @@ class SocketRefState {
 			this.socket.close();
 		};
 	}
-	
+
 
 	/**
 	 * Send value updates to the server
@@ -276,6 +310,10 @@ class SocketRefState {
 	 */
 	write(newValue, forceTimestamp = null) {
 
+		// if this is a read-only ref, don't write
+		if(this.readyOnly)
+			return;
+		
 		const ts = forceTimestamp || Date.now();
 		this.timestamp = ts;
 
@@ -313,5 +351,5 @@ class SocketRefState {
 			this.socket = null;
 		}
 	}
-	
+
 }
