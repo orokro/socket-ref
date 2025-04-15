@@ -18,6 +18,8 @@ import { WebSocketServer } from 'ws';
  */
 export function socketRefServer(options = {}) {
 
+	console.log('chicken');
+	
 	// handle options or defaults
 	const port = options.port || 3001;
 	let server = options.server || null;

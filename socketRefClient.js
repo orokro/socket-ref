@@ -12,6 +12,32 @@
 // vue
 import { ref, shallowRef, watch, computed } from 'vue';
 
+// well provide a global port here, if sockets don't specific their own port
+let globalPortSetting = 3001;
+
+// setting to show connection for debugging port
+let showConnectionLogs = false;
+
+/**
+ * Sets the global port number to use when sockets don't specify their port number
+ * 
+ * @param {Number} portNumber - port number to use for the global port number
+ */
+export function setGlobalSocketRefPort(portNumber){
+	globalPortSetting = portNumber;
+}
+
+
+/**
+ * Enable or disable connection logs for debugging
+ * 
+ * @param {Boolean} enable - optional, if true, enable connection logs
+ */
+export function enableConnectionLogs(enable=true){
+	showConnectionLogs = enable;
+}
+
+
 // FinalizationRegistry for cleanup when the ref is no longer used
 const registry = new FinalizationRegistry(({ socketRefState }) => {
 	if (socketRefState?.cleanup) socketRefState.cleanup();
@@ -40,7 +66,6 @@ export function socketRef(keyOrObj, defaultValue) {
 export function socketShallowRef(keyOrObj, defaultValue) {
 	return createSocketRef(shallowRef, keyOrObj, defaultValue, false);
 }
-
 
 
 /**
@@ -117,7 +142,7 @@ function createSocketRef(refType, keyOrObj, initialValue, readyOnly, onInitialCo
 	// get options or defaults
 	const key = options.key;
 	const ip = options.ip || 'localhost';
-	const port = options.port || 3001;
+	const port = options.port || undefined;
 
 	// create the ref that will be synced with the server
 	const state = refType(initialValue);
@@ -164,7 +189,7 @@ class SocketRefState {
 	 * @param {String} key - The key used for syncing with the server
 	 * @param {*} defaultValue - The default value for the socketRef
 	 * @param {String} ip - The IP address of the server
-	 * @param {String|Number} port - The port of the server 
+	 * @param {String|Number|null} port - The port of the server - or null if not set
 	 * @param {Boolean} readyOnly - True if the ref is read-only
 	 * @param {Function} onInitialConnect - A callback to run when the socket connects
 	 */
@@ -183,8 +208,9 @@ class SocketRefState {
 		// for writing, we'll need a timestamp
 		this.timestamp = 0;
 
-		// convert ip and port to a WebSocket URL
-		this.url = `ws://${ip}:${port}`;
+		// save connection details
+		this.ip = ip;
+		this.port = (port==null || port==undefined) ? undefined : port;
 
 		// this will become a function that stops the watchers in the socketRef or socketShallowRef closure
 		// this will be set after construction in said closure. See createSocketRef above.
@@ -202,12 +228,22 @@ class SocketRefState {
 	 * Connect to the server via WebSocket
 	 */
 	connect() {
+		
+		// convert ip and port to a WebSocket URL
+		const port = this.port || globalPortSetting;
+		this.url = `ws://${this.ip}:${port}`;
+
+		if(showConnectionLogs)
+			console.log('SocketRef: connecting to', this.url);
 
 		// create a new websocket with our url
 		this.socket = new WebSocket(this.url);
 
 		// when we connect send the init message w/ our key
 		this.socket.onopen = () => {
+
+			if(showConnectionLogs)
+				console.log('SocketRef: connected to', this.url);
 
 			// send the init message
 			this.socket.send(JSON.stringify({
@@ -294,11 +330,15 @@ class SocketRefState {
 		this.socket.onclose = () => {
 			this.ready = false;
 			setTimeout(() => this.connect(), 1000);
+			if(showConnectionLogs)
+				console.log('SocketRef: disconnected from', this.url);
 		};
 
 		// if there's an error, close the socket
 		this.socket.onerror = () => {
 			this.socket.close();
+			if(showConnectionLogs)
+				console.log('SocketRef: error on', this.url);
 		};
 	}
 
