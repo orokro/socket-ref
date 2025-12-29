@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e # Exit immediately if a command exits with a non-zero status
 
 # Ensure clean state
 if [ -n "$(git status --porcelain)" ]; then
@@ -26,7 +27,14 @@ git tag "v$VERSION"
 
 # Publish
 echo "Publishing to NPM..."
-npm publish
+echo "Enter 2FA OTP code (if required), or press Enter to try without:"
+read OTP
+
+if [ -n "$OTP" ]; then
+  npm publish --otp=$OTP
+else
+  npm publish
+fi
 
 # Push
 echo "Pushing to git..."
