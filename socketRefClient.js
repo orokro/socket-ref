@@ -208,6 +208,11 @@ class SocketRefState {
 		// for writing, we'll need a timestamp
 		this.timestamp = 0;
 
+		// Rate limiting
+		this.updatesLastSecond = 0;
+		this.lastRateLimitReset = Date.now();
+		this.rateLimitedUntil = 0;
+
 		// save connection details
 		this.ip = ip;
 		this.port = (port==null || port==undefined) ? undefined : port;
@@ -353,8 +358,28 @@ class SocketRefState {
 		// if this is a read-only ref, don't write
 		if(this.readyOnly)
 			return;
+
+		// Rate Limiting Logic
+		const now = Date.now();
+		if (now < this.rateLimitedUntil) {
+			return;
+		}
+
+		// Reset counter if more than 1 second has passed
+		if (now - this.lastRateLimitReset > 1000) {
+			this.updatesLastSecond = 0;
+			this.lastRateLimitReset = now;
+		}
+
+		this.updatesLastSecond++;
+
+		if (this.updatesLastSecond > 100) {
+			console.warn(`SocketRef: Rate limit exceeded for key "${this.key}". Pausing updates for 1 second.`);
+			this.rateLimitedUntil = now + 1000;
+			return;
+		}
 		
-		const ts = forceTimestamp || Date.now();
+		const ts = forceTimestamp || now;
 		this.timestamp = ts;
 
 		if (this.socket && this.socket.readyState === WebSocket.OPEN) {
