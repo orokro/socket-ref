@@ -41,12 +41,13 @@ export function socketRefServer(options = {}) {
 	 * @param {String} key - The socketRef state key to broadcast
 	 * @param {String} value - The value of the socketRef state
 	 * @param {number} timestamp - The timestamp of the socketRef state	
+	 * @param {WebSocket} excludeSocket - OPTIONAL; The socket to exclude from the broadcast
 	 */
-	function broadcast(key, value, timestamp) {
+	function broadcast(key, value, timestamp, excludeSocket = null) {
 
 		const message = JSON.stringify({ key, value, timestamp });
 		for (const client of wss.clients) {
-			if (client.readyState === client.OPEN) {
+			if (client !== excludeSocket && client.readyState === client.OPEN) {
 				client.send(message);
 			}
 		}// next client
@@ -98,7 +99,7 @@ export function socketRefServer(options = {}) {
 
 					// save the new state and broadcast it to all clients
 					keyStateMap.set(key, { value, timestamp: now });
-					broadcast(key, value, now);
+					broadcast(key, value, now, socket);
 				}
 			}
 		});
