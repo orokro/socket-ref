@@ -1,3 +1,7 @@
+'use strict';
+
+var ws = require('ws');
+
 /*
 	socketRefServer.js
 	------------------
@@ -7,8 +11,6 @@
 	This will allow you to sync refs between clients and a server.
 */
 
-// our server
-const { WebSocketServer } = require('ws');
 
 /**
  * Creates a WebSocket server that can be used with socketRefClient.js
@@ -18,8 +20,8 @@ const { WebSocketServer } = require('ws');
  */
 function socketRefServer(options = {}) {
 
-	console.log('cjs');
-
+	console.log('chicken');
+	
 	// handle options or defaults
 	const port = options.port || 3001;
 	let server = options.server || null;
@@ -27,9 +29,9 @@ function socketRefServer(options = {}) {
 
 	// create the server (or attach to an existing one)
 	if (server) {
-		wss = new WebSocketServer({ server });
+		wss = new ws.WebSocketServer({ server });
 	} else {
-		wss = new WebSocketServer({ port });
+		wss = new ws.WebSocketServer({ port });
 		console.log(`socketRefServer listening on ws://localhost:${port}`);
 	}
 
@@ -110,4 +112,4 @@ function socketRefServer(options = {}) {
 	
 }
 
-module.exports = { socketRefServer };
+exports.socketRefServer = socketRefServer;
