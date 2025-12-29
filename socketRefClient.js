@@ -159,10 +159,12 @@ function createSocketRef(refType, keyOrObj, initialValue, readyOnly, onInitialCo
 	// thus, we will watch the state ref before we return it, so we can call the socket code to update the server
 	socketRefState.stopWatch = watch(state, (newVal, oldValue) => {
 
+		if (socketRefState.isProcessingSocketMessage) return;
+
 		if (socketRefState.ready) {
 			socketRefState.write(newVal);
 		}
-	});
+	}, { flush: 'sync' });
 
 	// register the state with the finalization registry, so we can clean up when the ref is no longer used
 	registry.register(state, { socketRefState });
@@ -212,6 +214,9 @@ class SocketRefState {
 		this.updatesLastSecond = 0;
 		this.lastRateLimitReset = Date.now();
 		this.rateLimitedUntil = 0;
+
+		// flag to prevent infinite loops when updating from socket
+		this.isProcessingSocketMessage = false;
 
 		// save connection details
 		this.ip = ip;
@@ -272,63 +277,71 @@ class SocketRefState {
 			if (!state)
 				return;
 
-			// Handle init response, which includes the current value from the server
-			if (msg.type === 'init') {
+			// start ignoring changes from the socket so we don't loop
+			this.isProcessingSocketMessage = true;
 
-				const serverTimestamp = msg.timestamp || 0;
-				const serverValue = msg.value;
+			try {
+				// Handle init response, which includes the current value from the server
+				if (msg.type === 'init') {
 
-				const state = this.weakState.deref();
-				if (!state) {
+					const serverTimestamp = msg.timestamp || 0;
+					const serverValue = msg.value;
+
+					const state = this.weakState.deref();
+					if (!state) {
+						// if we have a callback for the initial connect, run it
+						if (this.onInitialConnect)
+							this.onInitialConnect(false);
+						return;
+					}
+
+					// Compare pending write vs server timestamp
+					if (serverValue === null) {
+
+						// Server has no value for this key
+						if (this.pendingWrite) {
+							state.value = this.pendingWrite.value;
+							this.write(this.pendingWrite.value, this.pendingWrite.timestamp);
+						} else {
+							state.value = this.defaultValue;
+							this.write(this.defaultValue);
+						}
+						this.timestamp = Date.now(); // mark this client as source of truth
+
+					} else {
+
+						// Server has value
+						if (this.pendingWrite && this.pendingWrite.timestamp > serverTimestamp) {
+							state.value = this.pendingWrite.value;
+							this.write(this.pendingWrite.value, this.pendingWrite.timestamp);
+							this.timestamp = this.pendingWrite.timestamp;
+						} else {
+							state.value = serverValue;
+							this.timestamp = serverTimestamp;
+						}
+					}
+
+					this.pendingWrite = null; // clear pending write
+					this.ready = true;
+
 					// if we have a callback for the initial connect, run it
 					if (this.onInitialConnect)
-						this.onInitialConnect(false);
+						this.onInitialConnect();
 					return;
 				}
 
-				// Compare pending write vs server timestamp
-				if (serverValue === null) {
+				// Normal update
+				if (msg.timestamp <= this.timestamp)
+					return;
 
-					// Server has no value for this key
-					if (this.pendingWrite) {
-						state.value = this.pendingWrite.value;
-						this.write(this.pendingWrite.value, this.pendingWrite.timestamp);
-					} else {
-						state.value = this.defaultValue;
-						this.write(this.defaultValue);
-					}
-					this.timestamp = Date.now(); // mark this client as source of truth
+				// update the timestamp and the state value
+				// because we are updating the vue state, it will be reactive for the user
+				this.timestamp = msg.timestamp;
+				state.value = msg.value;
 
-				} else {
-
-					// Server has value
-					if (this.pendingWrite && this.pendingWrite.timestamp > serverTimestamp) {
-						state.value = this.pendingWrite.value;
-						this.write(this.pendingWrite.value, this.pendingWrite.timestamp);
-						this.timestamp = this.pendingWrite.timestamp;
-					} else {
-						state.value = serverValue;
-						this.timestamp = serverTimestamp;
-					}
-				}
-
-				this.pendingWrite = null; // clear pending write
-				this.ready = true;
-
-				// if we have a callback for the initial connect, run it
-				if (this.onInitialConnect)
-					this.onInitialConnect();
-				return;
+			} finally {
+				this.isProcessingSocketMessage = false;
 			}
-
-			// Normal update
-			if (msg.timestamp <= this.timestamp)
-				return;
-
-			// update the timestamp and the state value
-			// because we are updating the vue state, it will be reactive for the user
-			this.timestamp = msg.timestamp;
-			state.value = msg.value;
 		};
 
 		// if the socket closes, try to reconnect
