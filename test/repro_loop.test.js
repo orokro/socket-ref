@@ -38,7 +38,7 @@ describe('Infinite Loop Reproduction', () => {
 		return new Promise(r => setTimeout(r, 100));
 	});
 
-	it('should produce an infinite loop of updates when Date.now() always increments', async () => {
+	it('should NOT produce an infinite loop of updates when Date.now() always increments', async () => {
 		const key = 'test-loop';
 		const state = { count: 0 };
 		const receivedMessages = [];
@@ -99,7 +99,7 @@ describe('Infinite Loop Reproduction', () => {
 
 		console.log(`Received ${state.count} messages in 500ms`);
 
-		// Assert that we have a loop
-		expect(state.count).toBeGreaterThan(10); 
+		// Assert that the loop is prevented
+		expect(state.count).toBeLessThan(5); 
 	});
 });
