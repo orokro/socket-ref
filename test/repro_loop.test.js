@@ -50,12 +50,14 @@ describe('Infinite Loop Reproduction', () => {
 			clientA.onopen = resolve;
 		});
 
+		// Subscribe manually (V2 Protocol)
+		clientA.send(JSON.stringify({ type: 'sub', key }));
+
 		// Listen to messages on Client A
 		clientA.onmessage = (event) => {
 			const msg = JSON.parse(event.data);
-			// Server broadcasts don't include type='update', so we assume it if key matches
-			// and it's not an init (which we don't expect via broadcast anyway)
-			if (msg.key === key && msg.type !== 'init') {
+			// V2 Protocol uses 'set'
+			if (msg.key === key && msg.type === 'set') {
 				state.count++;
 				receivedMessages.push(msg);
 			}
@@ -63,7 +65,7 @@ describe('Infinite Loop Reproduction', () => {
 
 		// 2. Initialize the key on the server via Client A
 		clientA.send(JSON.stringify({
-			type: 'update',
+			type: 'set',
 			key: key,
 			value: 'initial',
 			timestamp: Date.now()
@@ -88,7 +90,7 @@ describe('Infinite Loop Reproduction', () => {
 		// 5. Trigger the loop: Client A sends a new update.
 		console.log('Triggering update from Client A...');
 		clientA.send(JSON.stringify({
-			type: 'update',
+			type: 'set',
 			key: key,
 			value: { text: 'trigger' },
 			timestamp: Date.now()

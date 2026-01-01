@@ -1,13 +1,11 @@
-'use strict';
-
-var vue = require('vue');
+import { ref, shallowRef, watch, getCurrentScope, onScopeDispose, computed } from 'vue';
 
 // --- Configuration ---
 let GLOBAL_PORT = 3001;
 let LOG_CONNECTION = false;
 
-function setGlobalSocketRefPort(port) { GLOBAL_PORT = port; }
-function enableConnectionLogs(enable = true) { LOG_CONNECTION = enable; }
+export function setGlobalSocketRefPort(port) { GLOBAL_PORT = port; }
+export function enableConnectionLogs(enable = true) { LOG_CONNECTION = enable; }
 
 // --- Connection Manager (Singleton) ---
 const connections = new Map(); // "ws://ip:port" -> SharedSocket
@@ -196,8 +194,8 @@ function createSocketRef(targetRef, keyOrObj, initialValue, isReadOnly) {
     const cleanup = () => socket.unsubscribe(key, onRemoteUpdate);
 
     // A. Vue Lifecycle Cleanup
-    if (vue.getCurrentScope()) {
-        vue.onScopeDispose(cleanup);
+    if (getCurrentScope()) {
+        onScopeDispose(cleanup);
     }
 
     // B. GC Fallback Cleanup
@@ -207,7 +205,7 @@ function createSocketRef(targetRef, keyOrObj, initialValue, isReadOnly) {
 
     // 5. Watcher Logic (Uplink)
     if (!isReadOnly) {
-        vue.watch(state, (newVal) => {
+        watch(state, (newVal) => {
             if (isReceiving) return; // Suppression
 
             const now = Date.now();
@@ -217,48 +215,37 @@ function createSocketRef(targetRef, keyOrObj, initialValue, isReadOnly) {
     }
 
     // 6. Return
-    return isReadOnly ? vue.computed(() => state.value) : state;
+    return isReadOnly ? computed(() => state.value) : state;
 }
 
 // --- Exports ---
 
-function socketRef(key, val) { return createSocketRef(vue.ref, key, val, false); }
-function socketShallowRef(key, val) { return createSocketRef(vue.shallowRef, key, val, false); }
-function socketRefReadOnly(key, val) { return createSocketRef(vue.ref, key, val, true); }
-function socketShallowRefReadOnly(key, val) { return createSocketRef(vue.shallowRef, key, val, true); }
+export function socketRef(key, val) { return createSocketRef(ref, key, val, false); }
+export function socketShallowRef(key, val) { return createSocketRef(shallowRef, key, val, false); }
+export function socketRefReadOnly(key, val) { return createSocketRef(ref, key, val, true); }
+export function socketShallowRefReadOnly(key, val) { return createSocketRef(shallowRef, key, val, true); }
 
 // Async variants (wrappers that wait for connection? V2 makes this trickier with multiplexing)
 // With multiplexing, the socket might already be open. 
 // We can just return the ref immediately, it will populate when data arrives.
 // If strictly needed, we can expose a promise.
-function socketRefAsync(key, val) {
+export function socketRefAsync(key, val) {
     // V2: Just return the ref, it works "async" by nature (starts default, updates later).
     // The legacy async waited for "onopen".
     return Promise.resolve(socketRef(key, val));
 }
-function socketShallowRefAsync(key, val) {
+export function socketShallowRefAsync(key, val) {
     return Promise.resolve(socketShallowRef(key, val));
 }
 
 // Bind Refs (Keep existing logic, it was fine, just utility)
-function bindRefs(refA, refB) {
+export function bindRefs(refA, refB) {
     let updatingA = false;
     let updatingB = false;
-    const stopA = vue.watch(refA, (v) => { if (!updatingA) { updatingB = true; refB.value = v; updatingB = false; } });
-    const stopB = vue.watch(refB, (v) => { if (!updatingB) { updatingA = true; refA.value = v; updatingA = false; } });
+    const stopA = watch(refA, (v) => { if (!updatingA) { updatingB = true; refB.value = v; updatingB = false; } });
+    const stopB = watch(refB, (v) => { if (!updatingB) { updatingA = true; refA.value = v; updatingA = false; } });
     return () => { stopA(); stopB(); };
 }
-function bindRef(ref) {
+export function bindRef(ref) {
     return { to: (refB) => { ref.value = refB.value; return bindRefs(ref, refB); } };
 }
-
-exports.bindRef = bindRef;
-exports.bindRefs = bindRefs;
-exports.enableConnectionLogs = enableConnectionLogs;
-exports.setGlobalSocketRefPort = setGlobalSocketRefPort;
-exports.socketRef = socketRef;
-exports.socketRefAsync = socketRefAsync;
-exports.socketRefReadOnly = socketRefReadOnly;
-exports.socketShallowRef = socketShallowRef;
-exports.socketShallowRefAsync = socketShallowRefAsync;
-exports.socketShallowRefReadOnly = socketShallowRefReadOnly;

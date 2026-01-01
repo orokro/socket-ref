@@ -1,15 +1,13 @@
-'use strict';
+import { WebSocketServer } from 'ws';
 
-var ws = require('ws');
-
-function socketRefServer(options = {}) {
+export function socketRefServer(options = {}) {
     const port = options.port || 3001;
     let wss;
 
     if (options.server) {
-        wss = new ws.WebSocketServer({ server: options.server });
+        wss = new WebSocketServer({ server: options.server });
     } else {
-        wss = new ws.WebSocketServer({ port });
+        wss = new WebSocketServer({ port });
         console.log(`socketRefServer (V2) listening on ws://localhost:${port}`);
     }
 
@@ -98,5 +96,3 @@ function socketRefServer(options = {}) {
 
     return wss;
 }
-
-exports.socketRefServer = socketRefServer;
